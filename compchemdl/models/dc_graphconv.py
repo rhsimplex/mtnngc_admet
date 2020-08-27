@@ -30,7 +30,7 @@ config = tf.ConfigProto(
 # Model definition
 ###################
 
-def define_gc_regression_model(n_tasks, graph_conv_sizes=(128, 128), dense_size=256, batch_size=128, no_fcn=False,
+def define_gc_regression_model(n_tasks, graph_conv_sizes=(128, 128), dense_size=256, batch_size=128, no_fcn=False, gini_factor=0.,
                                learning_rate=0.001, config=config, model_dir='/tmp'):
     """
     Initializes the multitask regression GCNN
@@ -45,7 +45,7 @@ def define_gc_regression_model(n_tasks, graph_conv_sizes=(128, 128), dense_size=
     """
 
     return GraphConvModel(n_tasks=n_tasks, graph_conv_layers=graph_conv_sizes, dense_layer_size=dense_size,
-                          dropout=0.0, mode='regression', number_atom_features=75, uncertainty=False, no_fcn=no_fcn,
+                          dropout=0.0, mode='regression', number_atom_features=75, uncertainty=False, no_fcn=no_fcn, gini_factor=gini_factor,
                           batch_size=batch_size, learning_rate=learning_rate, learning_rate_decay_time=1000,
                           optimizer_type='adam', configproto=config, model_dir=model_dir)
 
@@ -99,7 +99,7 @@ def load_data(dataset_file, split_field=None, smiles_field='Smiles', y_field=Non
 
 
 def train_and_validate_mtnn(train, n_tasks, outdir, graph_conv_sizes, dense_size, batch_size, learning_rate, num_epochs,
-                            pickle_file_name, no_fcn=False, test=None, test_unscaled=None, transformer=None, fold=None):
+                            pickle_file_name, no_fcn=False, gini_factor=0., test=None, test_unscaled=None, transformer=None, fold=None):
     """
     :param train: DeepChen dataset object, y appropriately scaled already
     :param n_tasks: number of tasks in the data
@@ -122,7 +122,7 @@ def train_and_validate_mtnn(train, n_tasks, outdir, graph_conv_sizes, dense_size
     model_dir = op.join(outdir, 'model')
     ensure_dir(model_dir)
     model = define_gc_regression_model(n_tasks, graph_conv_sizes=graph_conv_sizes,
-                                       dense_size=dense_size, batch_size=batch_size, no_fcn=no_fcn,
+                                       dense_size=dense_size, batch_size=batch_size, no_fcn=no_fcn, gini_factor=gini_factor,
                                        learning_rate=learning_rate, model_dir=model_dir)
 
     # 2. Define the metrics

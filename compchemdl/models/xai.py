@@ -18,7 +18,7 @@ from deepchem.models.tensorgraph.layers import Layer, Dense, SoftMax, Reshape, \
 from deepchem.models.tensorgraph.layers import L2Loss, Label, Weights, Feature
 from deepchem.models.tensorgraph.tensor_graph import TensorGraph
 from deepchem.trans import undo_transforms
-
+from tensorflow.python.keras.regularizers import Regularizer
 
 class TrimGraphOutput(Layer):
     """Trim the output to the correct number of samples.
@@ -45,6 +45,27 @@ class TrimGraphOutput(Layer):
         return out_tensor
 
 
+class Gini(Regularizer):
+    def __init__(self, n_aggregations=2, factor=10.):
+        self.n_aggregations = n_aggregations
+        self.factor = factor
+
+    def __call__(self, x):
+        s = 0
+        m_view = tf.reshape(x, (self.n_aggregations * x.shape[0].value, x.shape[1] // self.n_aggregations))
+        for i in range(m_view.shape[0]):
+            row = m_view[i]
+            t = tf.tile(
+                row,
+                tf.expand_dims(row.shape[0], -1),
+            )
+            t = tf.reshape(t, (row.shape[0], row.shape[0]))
+            nominator = tf.reduce_sum(tf.abs(t - tf.transpose(t)))
+            denominator = 2. * tf.cast(tf.square(row.shape[-1].value) - row.shape[-1].value, dtype=tf.float64) * tf.reduce_mean(tf.abs(row)) + 0.0001
+            s += nominator / denominator
+        return (1 - s / m_view.shape[0].value) * self.factor
+
+
 class GraphConvModel(TensorGraph):
 
     def __init__(self,
@@ -57,6 +78,7 @@ class GraphConvModel(TensorGraph):
                  n_classes=2,
                  uncertainty=False,
                  no_fcn=False,
+                 gini_factor=0.,
                  **kwargs):
         """
     Parameters
@@ -95,6 +117,7 @@ class GraphConvModel(TensorGraph):
         self.n_classes = n_classes
         self.uncertainty = uncertainty
         self.no_fcn = no_fcn
+        self.gini_factor = gini_factor
         if not isinstance(dropout, collections.Sequence):
             dropout = [dropout] * (len(graph_conv_layers) + 1)
         if len(dropout) != len(graph_conv_layers) + 1:
@@ -168,9 +191,14 @@ class GraphConvModel(TensorGraph):
             self.set_loss(weighted_loss)
         else:
             labels = Label(shape=(None, n_tasks))
+            if self.gini_factor > 0.:
+                reg = Gini(n_aggregations=2, factor=self.gini_factor)
+                regressor = Dense(in_layers=readout, out_channels=n_tasks, kernel_regularizer=reg)
+            else:
+                regressor = Dense(in_layers=readout, out_channels=n_tasks)
             output = Reshape(
                 shape=(None, n_tasks),
-                in_layers=[Dense(in_layers=readout, out_channels=n_tasks)])
+                in_layers=[regressor])
             output = TrimGraphOutput([output, weights])
             self.add_output(output)
             if self.uncertainty:
