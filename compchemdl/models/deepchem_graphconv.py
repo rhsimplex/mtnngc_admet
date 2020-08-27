@@ -19,7 +19,7 @@ default_config = tf.ConfigProto(
 # Model definition
 ###################
 
-def define_gc_regression_model(n_tasks, graph_conv_sizes=(128, 128), dense_size=256, batch_size=128,
+def define_gc_regression_model(n_tasks, graph_conv_sizes=(128, 128), dense_size=256, batch_size=128, no_fcn=False,
                                learning_rate=0.001, config=default_config, model_dir='/tmp'):
     """
     Initializes the multitask regression GCNN
@@ -34,7 +34,7 @@ def define_gc_regression_model(n_tasks, graph_conv_sizes=(128, 128), dense_size=
     """
 
     return GraphConvModel(n_tasks=n_tasks, graph_conv_layers=graph_conv_sizes, dense_layer_size=dense_size,
-                          dropout=0.0, mode='regression', number_atom_features=75, uncertainty=False,
+                          dropout=0.0, mode='regression', number_atom_features=75, uncertainty=False, no_fcn=no_fcn,
                           batch_size=batch_size, learning_rate=learning_rate, learning_rate_decay_time=1000,
                           optimizer_type='adam', configproto=config, model_dir=model_dir)
 

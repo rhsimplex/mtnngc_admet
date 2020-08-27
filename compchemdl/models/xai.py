@@ -45,8 +45,6 @@ class TrimGraphOutput(Layer):
         return out_tensor
 
 
-
-
 class GraphConvModel(TensorGraph):
 
     def __init__(self,
@@ -258,43 +256,3 @@ class GraphConvTensorGraph(GraphConvModel):
                                            "GraphConvModel"), FutureWarning)
 
         super(GraphConvTensorGraph, self).__init__(*args, **kwargs)
-
-
-class WeaveTensorGraph(WeaveModel):
-
-    def __init__(self, *args, **kwargs):
-        warnings.warn(
-            TENSORGRAPH_DEPRECATION.format("WeaveTensorGraph", "WeaveModel"),
-            FutureWarning)
-
-        super(WeaveModel, self).__init__(*args, **kwargs)
-
-
-class DTNNTensorGraph(DTNNModel):
-
-    def __init__(self, *args, **kwargs):
-        warnings.warn(
-            TENSORGRAPH_DEPRECATION.format("DTNNTensorGraph", "DTNNModel"),
-            FutureWarning)
-
-        super(DTNNModel, self).__init__(*args, **kwargs)
-
-
-class DAGTensorGraph(DAGModel):
-
-    def __init__(self, *args, **kwargs):
-        warnings.warn(
-            TENSORGRAPH_DEPRECATION.format("DAGTensorGraph", "DAGModel"),
-            FutureWarning)
-
-        super(DAGModel, self).__init__(*args, **kwargs)
-
-
-class MPNNTensorGraph(MPNNModel):
-
-    def __init__(self, *args, **kwargs):
-        warnings.warn(
-            TENSORGRAPH_DEPRECATION.format("MPNNTensorGraph", "MPNNModel"),
-            FutureWarning)
-
-        super(MPNNModel, self).__init__(*args, **kwargs)
