@@ -37,7 +37,7 @@ def get_multitask_outdir(tasks_nickname):
 ################
 
 def train_test_mtnn(train_task_csvs, test_tasks_csvs, tasks_nickname, smiles_field, y_field, id_field,
-                    tempdir, num_epochs=40, batch_size=128, learning_rate=0.001, graph_conv_sizes=(128, 128),
+                    tempdir, no_fcn=False, num_epochs=40, batch_size=128, learning_rate=0.001, graph_conv_sizes=(128, 128),
                     dense_size=256, gpu=None):
     """
     Trains a multitask GCNN using the training sets in train_tasks_csvs and validates it using the test sets in
@@ -96,7 +96,7 @@ def train_test_mtnn(train_task_csvs, test_tasks_csvs, tasks_nickname, smiles_fie
         # Train the model
         scaled_train_y, yhattrain, scaled_train_w, scaled_test_y, yhattest, scaled_test_w = \
             train_and_validate_mtnn(scaled_train, n_tasks=len(tasks), outdir=outdir, graph_conv_sizes=graph_conv_sizes,
-                                    dense_size=dense_size, batch_size=batch_size, learning_rate=learning_rate,
+                                    dense_size=dense_size, no_fcn=no_fcn, batch_size=batch_size, learning_rate=learning_rate,
                                     num_epochs=num_epochs, pickle_file_name=tasks_nickname + '.pkl', test=scaled_val,
                                     transformer=transformer, test_unscaled=test_dset, gpu=gpu)
 
@@ -130,7 +130,7 @@ def train_test_mtnn(train_task_csvs, test_tasks_csvs, tasks_nickname, smiles_fie
 
 def cross_validate_mtnn(task_csvs, tasks_nickname, smiles_field, split_field, y_field, id_field,
                         tempdir, num_epochs, batch_size=128, learning_rate=0.001, graph_conv_sizes=(128, 128),
-                        dense_size=256, gpu=None):
+                        dense_size=256, no_fcn=False, gpu=None):
     """
     Cross-validates a multitask GCNN using the training sets in train_tasks_csvs. Saves the trained models and the
     predictions under folders named "fold_i". Prints performance metrics (R2 and Spearman rho) after every epoch.
@@ -188,7 +188,7 @@ def cross_validate_mtnn(task_csvs, tasks_nickname, smiles_field, split_field, y_
             train_y, yhattrain, train_w, test_y, yhattest, test_w = \
                 train_and_validate_mtnn(scaled_train, len(tasks), outdir=outdir, graph_conv_sizes=graph_conv_sizes,
                                         dense_size=dense_size, batch_size=batch_size, learning_rate=learning_rate,
-                                        num_epochs=num_epochs, pickle_file_name=tasks_nickname + '_fold_%i.pkl' % i,
+                                        no_fcn=no_fcn, num_epochs=num_epochs, pickle_file_name=tasks_nickname + '_fold_%i.pkl' % i,
                                         test=scaled_val, test_unscaled=val, transformer=transformer, fold=i, gpu=gpu)
 
             # compute metrics
@@ -234,7 +234,7 @@ def cross_validate_mtnn(task_csvs, tasks_nickname, smiles_field, split_field, y_
 ###################
 
 def train_multitask_gc(train_task_csvs, tasks_nickname, smiles_field, y_field, id_field, tempdir,
-                       num_epochs, batch_size=128, learning_rate=0.001, graph_conv_sizes=(128, 128),
+                       num_epochs, no_fcn=False, batch_size=128, learning_rate=0.001, graph_conv_sizes=(128, 128),
                        dense_size=256, gpu=None):
     """
     We assemble all the data we have on all tasks for a final training run.
@@ -278,7 +278,7 @@ def train_multitask_gc(train_task_csvs, tasks_nickname, smiles_field, y_field, i
 
         train_y, yhattrain, train_w = train_and_validate_mtnn(scaled_train, len(tasks), outdir,
                                                               graph_conv_sizes=graph_conv_sizes,
-                                                              dense_size=dense_size, batch_size=batch_size,
+                                                              dense_size=dense_size, batch_size=batch_size, no_fcn=no_fcn,
                                                               learning_rate=learning_rate, num_epochs=num_epochs,
                                                               pickle_file_name=tasks_nickname + '.pkl', test=None,
                                                               test_unscaled=None, transformer=transformer, fold=None,
@@ -333,7 +333,7 @@ def evaluate_multitask_gc(ytrue, yhat, w):
 # RUNNING JOB CONTROL
 #######################
 
-def dispatch_job(tasks_dir, model_nickname, tempdir_nickname, smiles_field='canonical_smiles',
+def dispatch_job(tasks_dir, model_nickname, tempdir_nickname, smiles_field='canonical_smiles', no_fcn=False,
                  y_field='label', id_field='mol_index', num_epochs=40, batch_size=128, learning_rate=0.001,
                  graph_conv_sizes=(128, 128), dense_size=256, split_field='fold', cv=True, final=False,
                  test_tasks_dir=None, gpu=None):
@@ -341,7 +341,7 @@ def dispatch_job(tasks_dir, model_nickname, tempdir_nickname, smiles_field='cano
     if cv:
         print('Cross-validation run')
         files = sorted([op.join(tasks_dir, f) for f in os.listdir(tasks_dir) if op.isfile(op.join(tasks_dir, f))])
-        return cross_validate_mtnn(files, model_nickname, split_field=split_field, smiles_field=smiles_field,
+        return cross_validate_mtnn(files, model_nickname, split_field=split_field, smiles_field=smiles_field, no_fcn=no_fcn,
                                    y_field=y_field, id_field=id_field, tempdir=op.join(RESULTS_DIR, tempdir_nickname),
                                    num_epochs=num_epochs, batch_size=batch_size, learning_rate=learning_rate,
                                    graph_conv_sizes=graph_conv_sizes, dense_size=dense_size, gpu=gpu)
@@ -356,7 +356,7 @@ def dispatch_job(tasks_dir, model_nickname, tempdir_nickname, smiles_field='cano
             test_files = sorted([op.join(test_tasks_dir, f) for f in os.listdir(test_tasks_dir)
                                  if op.isfile(op.join(test_tasks_dir, f))])
 
-            return train_test_mtnn(train_files, test_files, model_nickname, smiles_field=smiles_field,
+            return train_test_mtnn(train_files, test_files, model_nickname, smiles_field=smiles_field, no_fcn=no_fcn,
                                    y_field=y_field, id_field=id_field, tempdir=op.join(RESULTS_DIR, tempdir_nickname),
                                    num_epochs=num_epochs, batch_size=batch_size, learning_rate=learning_rate,
                                    graph_conv_sizes=graph_conv_sizes, dense_size=dense_size, gpu=gpu)
@@ -365,7 +365,7 @@ def dispatch_job(tasks_dir, model_nickname, tempdir_nickname, smiles_field='cano
             train_files = sorted([op.join(tasks_dir, f) for f in os.listdir(tasks_dir)
                                   if op.isfile(op.join(tasks_dir, f))])
 
-            return train_multitask_gc(train_files, model_nickname, smiles_field=smiles_field,
+            return train_multitask_gc(train_files, model_nickname, smiles_field=smiles_field, no_fcn=no_fcn,
                                       y_field=y_field, id_field=id_field,
                                       tempdir=op.join(RESULTS_DIR, tempdir_nickname), num_epochs=num_epochs,
                                       batch_size=batch_size, learning_rate=learning_rate,
@@ -390,6 +390,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--learningrate', help='learning rate', default=0.001, type=float)
     parser.add_argument('-s', '--smiles_field', help='name of the column containing the molecules SMILES',
                         default='canonical_smiles', type=str)
+    parser.add_argument('-c', '--no_fcn', help='omit fully connected layer', action='store_true', default=False)
     parser.add_argument('-y', '--y_field', help='name of the column containing the target value to predict',
                         default='label', type=str)
     parser.add_argument('-i', '--id_field', help='name of the column containing the identifier for the compounds',
@@ -401,5 +402,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     dispatch_job(tasks_dir=args.tasks, model_nickname=args.name, tempdir_nickname=args.output, cv=args.cv,
                  final=args.refit, batch_size=args.batch, num_epochs=args.epochs, learning_rate=args.learningrate,
-                 smiles_field=args.smiles_field,  y_field=args.y_field, split_field=args.split_field,
+                 smiles_field=args.smiles_field,  no_fcn=args.no_fcn, y_field=args.y_field, split_field=args.split_field,
                  test_tasks_dir=args.test_tasks, gpu=args.gpu)

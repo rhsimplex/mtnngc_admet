@@ -58,6 +58,7 @@ class GraphConvModel(TensorGraph):
                  number_atom_features=75,
                  n_classes=2,
                  uncertainty=False,
+                 no_fcn=False,
                  **kwargs):
         """
     Parameters
@@ -95,6 +96,7 @@ class GraphConvModel(TensorGraph):
         self.number_atom_features = number_atom_features
         self.n_classes = n_classes
         self.uncertainty = uncertainty
+        self.no_fcn = no_fcn
         if not isinstance(dropout, collections.Sequence):
             dropout = [dropout] * (len(graph_conv_layers) + 1)
         if len(dropout) != len(graph_conv_layers) + 1:
@@ -130,18 +132,25 @@ class GraphConvModel(TensorGraph):
                 batch_norm1 = Dropout(dropout, in_layers=batch_norm1)
             gp_in = [batch_norm1, self.degree_slice, self.membership] + self.deg_adjs
             in_layer = GraphPool(in_layers=gp_in)
-        dense = Dense(
-            out_channels=self.dense_layer_size,
-            activation_fn=tf.nn.relu,
-            in_layers=[in_layer])
-        batch_norm3 = BatchNorm(in_layers=[dense])
-        if self.dropout[-1] > 0.0:
-            batch_norm3 = Dropout(self.dropout[-1], in_layers=batch_norm3)
-        readout = GraphGather(
-            batch_size=self.batch_size,
-            activation_fn=tf.nn.tanh,
-            in_layers=[batch_norm3, self.degree_slice, self.membership] +
-                      self.deg_adjs)
+        if not self.no_fcn:
+            dense = Dense(
+                out_channels=self.dense_layer_size,
+                activation_fn=tf.nn.relu,
+                in_layers=[in_layer])
+            batch_norm3 = BatchNorm(in_layers=[dense])
+            if self.dropout[-1] > 0.0:
+                batch_norm3 = Dropout(self.dropout[-1], in_layers=batch_norm3)
+            readout = GraphGather(
+                batch_size=self.batch_size,
+                activation_fn=tf.nn.tanh,
+                in_layers=[batch_norm3, self.degree_slice, self.membership] +
+                          self.deg_adjs)
+        else:
+            readout = GraphGather(
+                batch_size=self.batch_size,
+                activation_fn=tf.nn.tanh,
+                in_layers=[in_layer, self.degree_slice, self.membership] +
+                          self.deg_adjs)
 
         n_tasks = self.n_tasks
         weights = Weights(shape=(None, n_tasks))

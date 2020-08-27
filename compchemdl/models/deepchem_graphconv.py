@@ -4,7 +4,7 @@ import pickle
 from scipy.stats import spearmanr
 import tensorflow as tf
 
-from deepchem.models import GraphConvModel
+from compchemdl.models.xai import GraphConvModel
 from deepchem.metrics import Metric, r2_score
 
 from compchemdl.utils import ensure_dir
@@ -45,7 +45,7 @@ def define_gc_regression_model(n_tasks, graph_conv_sizes=(128, 128), dense_size=
 
 
 def train_and_validate_mtnn(train, n_tasks, outdir, graph_conv_sizes, dense_size, batch_size, learning_rate, num_epochs,
-                            pickle_file_name, test=None, test_unscaled=None, transformer=None, fold=None, gpu=None):
+                            pickle_file_name, no_fcn=False, test=None, test_unscaled=None, transformer=None, fold=None, gpu=None):
     """
     :param train: DeepChen dataset object, y appropriately scaled already
     :param n_tasks: number of tasks in the data
@@ -82,7 +82,7 @@ def train_and_validate_mtnn(train, n_tasks, outdir, graph_conv_sizes, dense_size
     model_dir = op.join(outdir, 'model')
     ensure_dir(model_dir)
     model = define_gc_regression_model(n_tasks, graph_conv_sizes=graph_conv_sizes,
-                                       dense_size=dense_size, batch_size=batch_size,
+                                       dense_size=dense_size, batch_size=batch_size, no_fcn=no_fcn,
                                        learning_rate=learning_rate, model_dir=model_dir, config=config)
 
     # 2. Define the metrics
