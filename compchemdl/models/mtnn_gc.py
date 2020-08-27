@@ -401,6 +401,6 @@ if __name__ == '__main__':
                         default=None, type=int)
     args = parser.parse_args()
     dispatch_job(tasks_dir=args.tasks, model_nickname=args.name, tempdir_nickname=args.output, cv=args.cv,
-                 final=args.refit, batch_size=args.batch, num_epochs=args.epochs, learning_rate=args.learningrate,
+                 final=args.refit, id_field=args.id_field, batch_size=args.batch, num_epochs=args.epochs, learning_rate=args.learningrate,
                  smiles_field=args.smiles_field,  no_fcn=args.no_fcn, y_field=args.y_field, split_field=args.split_field,
                  test_tasks_dir=args.test_tasks, gpu=args.gpu)
