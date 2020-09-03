@@ -392,6 +392,7 @@ if __name__ == '__main__':
                         default='canonical_smiles', type=str)
     parser.add_argument('-c', '--no_fcn', help='omit fully connected layer', action='store_true', default=False)
     parser.add_argument('-q', '--gini_factor', help='gini regularizer for last output layer', default=0., type=float)
+    parser.add_argument('-v', '--graph_conv_sizes', help='output sizes', nargs='+', type=int, default=(128, 128))
     parser.add_argument('-y', '--y_field', help='name of the column containing the target value to predict',
                         default='label', type=str)
     parser.add_argument('-i', '--id_field', help='name of the column containing the identifier for the compounds',
@@ -403,5 +404,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     dispatch_job(tasks_dir=args.tasks, model_nickname=args.name, tempdir_nickname=args.output, cv=args.cv,
                  final=args.refit, id_field=args.id_field, batch_size=args.batch, num_epochs=args.epochs, learning_rate=args.learningrate,
-                 smiles_field=args.smiles_field,  no_fcn=args.no_fcn, gini_factor=args.gini_factor, y_field=args.y_field, split_field=args.split_field,
+                 smiles_field=args.smiles_field,  no_fcn=args.no_fcn, gini_factor=args.gini_factor, graph_conv_sizes=args.graph_conv_sizes, y_field=args.y_field, split_field=args.split_field,
                  test_tasks_dir=args.test_tasks, gpu=args.gpu)

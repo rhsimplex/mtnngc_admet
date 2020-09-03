@@ -11,21 +11,22 @@ from deepchem.metrics import to_one_hot
 from deepchem.models.tensorgraph.graph_layers import WeaveGather, \
     DTNNEmbedding, DTNNStep, DTNNGather, DAGLayer, \
     DAGGather, DTNNExtract, MessagePassing, SetGather
+from deepchem.models.tensorgraph import TensorGraph
 from deepchem.models.tensorgraph.graph_layers import WeaveLayerFactory
 from deepchem.models.tensorgraph.layers import Layer, Dense, SoftMax, Reshape, \
     SoftMaxCrossEntropy, GraphConv, BatchNorm, Exp, ReduceMean, ReduceSum, \
-    GraphPool, GraphGather, WeightedError, Dropout, BatchNorm, Stack, Flatten, GraphCNN, GraphCNNPool
+    GraphPool, GraphGather, WeightedError, Dropout, BatchNorm, Stack, Flatten, GraphCNN, GraphCNNPool, Divide
 from deepchem.models.tensorgraph.layers import L2Loss, Label, Weights, Feature
-from deepchem.models.tensorgraph.tensor_graph import TensorGraph
 from deepchem.trans import undo_transforms
 from tensorflow.python.keras.regularizers import Regularizer
+
 
 class TrimGraphOutput(Layer):
     """Trim the output to the correct number of samples.
 
-  GraphGather always outputs fixed size batches.  This layer trims the output
-  to the number of samples that were in the actual input tensors.
-  """
+    GraphGather always outputs fixed size batches.  This layer trims the output
+    to the number of samples that were in the actual input tensors.
+    """
 
     def __init__(self, in_layers, **kwargs):
         super(TrimGraphOutput, self).__init__(in_layers, **kwargs)
@@ -45,25 +46,56 @@ class TrimGraphOutput(Layer):
         return out_tensor
 
 
-class Gini(Regularizer):
-    def __init__(self, n_aggregations=2, factor=10.):
-        self.n_aggregations = n_aggregations
-        self.factor = factor
+def gini_decay(factor):
+    variables = []
+    for v in tf.trainable_variables():
+        # only pick up kernels the dense layers (in this case there should be only one, since no_fcn should be true)
+        if v.get_shape().ndims == 2 and v.name.startswith('Dense'):
+            variables.append(v)
 
-    def __call__(self, x):
-        s = 0
-        m_view = tf.reshape(x, (self.n_aggregations * x.shape[0].value, x.shape[1] // self.n_aggregations))
-        for i in range(m_view.shape[0]):
-            row = m_view[i]
-            t = tf.tile(
-                row,
-                tf.expand_dims(row.shape[0], -1),
-            )
-            t = tf.reshape(t, (row.shape[0], row.shape[0]))
-            nominator = tf.reduce_sum(tf.abs(t - tf.transpose(t)))
-            denominator = 2. * tf.cast(tf.square(row.shape[-1].value) - row.shape[-1].value, dtype=tf.float64) * tf.reduce_mean(tf.abs(row)) + 0.0001
-            s += nominator / denominator
-        return (1 - s / m_view.shape[0].value) * self.factor
+    x = v[0]
+    with tf.name_scope('weight_decay'):
+        # flatten the kernal weight matrix
+        d = tf.expand_dims(tf.reshape(x, [-1]), 0)
+        # compute the nominator of the quantity here: https://en.wikipedia.org/wiki/Gini_coefficient#Definition
+        # this always seems to come out to zero, and I don't know why. If you remove the additive factor, you will not be able to train as your loss will always be nans
+        nominator = tf.reduce_sum(tf.abs(d - tf.transpose(d))) + 0.1  # <- remove this additive factor to reproduce
+        denominator = 2. * ((512*10)**2 - (512*10)) * tf.reduce_mean(tf.abs(d)) + 0.0001  # small additive factor for numerical stability in the denominator
+    return tf.truediv(nominator,  denominator) ** factor
+
+
+class GiniDecay(Layer):
+    """Apply gini coefficent adjustment to loss
+
+    The Gini coefficient always ranges between 0 and 1. We can raise it to a factor to make the effect
+    more extreme (gini ** factor), since this value will also lie between zero and one.
+
+    The final loss is computed as final_loss = weighted_L2_loss / (gini ** factor)
+    """
+
+    def __init__(self, factor=10., **kwargs):
+        """Create a weight decay penalty layer.
+
+        Parameters
+        ----------
+        factor: float
+          magnitude of the factor term
+        """
+        self.factor = factor
+        super(GiniDecay, self).__init__(**kwargs)
+        try:
+            self._shape = tuple(self.in_layers[0].shape)
+        except:
+            pass
+
+    def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+        inputs = self._get_input_tensors(in_layers)
+        parent_tensor = inputs[0]
+        # we want highly "inequal" kernels, so we divide by the gini coefficient, which is near one when the weights are inequal
+        out_tensor = parent_tensor / gini_decay(self.factor)
+        if set_tensors:
+            self.out_tensor = out_tensor
+        return out_tensor
 
 
 class GraphConvModel(TensorGraph):
@@ -191,11 +223,7 @@ class GraphConvModel(TensorGraph):
             self.set_loss(weighted_loss)
         else:
             labels = Label(shape=(None, n_tasks))
-            if self.gini_factor > 0.:
-                reg = Gini(n_aggregations=2, factor=self.gini_factor)
-                regressor = Dense(in_layers=readout, out_channels=n_tasks, kernel_regularizer=reg)
-            else:
-                regressor = Dense(in_layers=readout, out_channels=n_tasks)
+            regressor = Dense(in_layers=readout, out_channels=n_tasks)
             output = Reshape(
                 shape=(None, n_tasks),
                 in_layers=[regressor])
@@ -212,7 +240,11 @@ class GraphConvModel(TensorGraph):
                 weighted_loss = weights * (diff * diff / var + log_var)
                 weighted_loss = ReduceSum(ReduceMean(weighted_loss, axis=[1]))
             else:
-                weighted_loss = ReduceSum(L2Loss(in_layers=[labels, output, weights]))
+                weighted_loss_no_decay = ReduceSum(L2Loss(in_layers=[labels, output, weights]))
+                if self.gini_factor > 0.:
+                    weighted_loss = GiniDecay(self.gini_factor, in_layers=weighted_loss_no_decay)
+                else:
+                    weighted_loss = weighted_loss_no_decay
             self.set_loss(weighted_loss)
 
     def default_generator(self,
